@@ -1,0 +1,86 @@
+---
+title: "Gabrg2 cKO synapse histogram" 
+subtitle: "Report" 
+author: "Gabi Sejourne"
+date: "03/03/2024"
+format: pdf
+editor: visual 
+execute: 
+  echo: true 
+---
+
+```{r}
+#| label: packages_and_data
+library(tidyverse)
+library(ggplot2)
+library(viridis)
+synapse_counts = read_csv("tilescans/Synapse_Counts_Normalized_Pixel_Based_Unblinded.csv", show_col_types = FALSE)
+vgat_counts = read_csv("tilescans/VGAT_Counts_Normalized_Pixel_Based_Unblinded.csv", show_col_types = FALSE)
+gephyrin_counts = read_csv("tilescans/Gephyrin_Counts_Normalized_Pixel_Based_Unblinded.csv", show_col_types = FALSE)
+
+```
+
+```{r}
+#| label: synapse_counts
+
+p_synapse <- ggplot(data = synapse_counts, aes(x =synapse_counts$"Normalized distance from pia (%)", y = synapse_counts$"Synapse Counts", color = Genotype)
+    ) +
+  stat_smooth(
+    method = "loess", span = 0.1, se = TRUE, alpha = 0.3, aes(fill = Genotype)
+    ) +
+  labs(
+    y = "VGAT/GEPH Colocs",
+    x = "Normalized distance from pia (%)",
+    title = "P42 Synapse Counts in ACC"
+  )
+p_synapse <- p_synapse + scale_colour_viridis_d() + scale_fill_viridis_d()
+
+png(filename = "plots/p42_Synapse_Counts_tilescan_Normalized.png", width = 1500, height = 700, res = 300)
+  p_synapse
+  dev.off()
+  
+p_synapse
+```
+
+```{r}
+#| label: synapse_counts
+
+p_vgat <- ggplot(data = vgat_counts, aes(x =vgat_counts$"Normalized distance from pia (%)", y = vgat_counts$"VGAT Counts", color = Genotype)
+    ) +
+  stat_smooth(
+    method = "loess", span = 0.1, se = TRUE, alpha = 0.3, aes(fill = Genotype)
+    ) +
+  labs(
+    y = "VGAT Puncta",
+    x = "Normalized distance from pia (%)",
+    title = "P42 VGAT Counts in V1"
+  )
+p_vgat <- p_vgat + scale_colour_viridis_d() + scale_fill_viridis_d()
+
+png(filename = "plots/p42_vgat_Counts_tilescan_Normalized.png", width = 1500, height = 700, res = 300)
+  p_vgat
+  dev.off()
+  
+p_vgat
+```
+
+```{r}
+
+p_gephyrin <- ggplot(data = gephyrin_counts, aes(x =gephyrin_counts$"Normalized distance from pia (%)", y = gephyrin_counts$"Gephyrin Counts", color = Genotype)
+    ) +
+  stat_smooth(
+    method = "loess", span = 0.1, se = TRUE, alpha = 0.3, aes(fill = Genotype)
+    ) +
+  labs(
+    y = "Gephyrin Puncta",
+    x = "Normalized distance from pia (%)",
+    title = "P42 Gephyrin Counts in V1"
+  )
+p_gephyrin <- p_gephyrin + scale_colour_viridis_d() + scale_fill_viridis_d()
+
+png(filename = "plots/p42_gephyrin_Counts_tilescan_Normalized.png", width = 1500, height = 700, res = 300)
+  p_gephyrin
+  dev.off()
+  
+p_gephyrin
+```
