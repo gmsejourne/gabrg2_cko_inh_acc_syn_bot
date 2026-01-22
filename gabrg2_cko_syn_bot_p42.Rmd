@@ -1,0 +1,186 @@
+---
+title: "gabrg2_cko_syn_bot"
+output:
+  html_document: default
+  pdf_document: default
+date: "2024-01-16"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(ggplot2)
+library(ggpubr)
+library(ggbeeswarm)
+library(dplyr)
+library(readxl)
+library(stringr)
+library(dplyr)
+library(viridis)
+library(tidyverse)
+library(colorspace)
+
+#windowsFonts(Arial = windowsFont("Arial"))
+
+# Defines a colorblind-friendly palette
+cbPalette <- c("#C10028","#6C5C00","#00952A","#0092FF","#FF00EB","#F67D00","#27CC00","#00E9FB","#F2BAFF","#FFDEE5")
+
+# Imports dataset called "combined" that has the columns "replicate," "variable," and "value"
+p42_counts <- read_excel("layers/Summary_copy2.xlsx")
+decoder <- read.csv("layers/Decoder.csv")
+
+
+p42_counts_tilescan <- read_excel("tilescans/Summary.xlsx")
+decoder <- read.csv("tilescans/Decoder.csv")
+
+```
+
+
+```{r}
+# Orders the variables on x-axis
+p42_counts$old_names <- c(1:length(p42_counts$Image))
+
+for (i in 1:length(p42_counts$Image)){
+    p42_counts$old_names[i] <- strsplit(p42_counts$Image[i], "[_]")[[1]][1]
+    p42_counts$old_names[i] <- strsplit( p42_counts$old_names[i], "[\\]")[[1]][2]
+}
+
+p42_counts_decoded <- merge(p42_counts, decoder, by = "old_names")
+
+counts <- data.frame(animal = p42_counts_decoded$Animal,
+                     genotype = p42_counts_decoded$Genotype,
+                     sex = p42_counts_decoded$Sex,
+                     layer = sub(".tif", "", substring(p42_counts_decoded$Image, regexpr(".tif", p42_counts_decoded$Image) - 1)),
+                     synapse_count = p42_counts_decoded$`Colocalized Puncta Count`,
+                     image = p42_counts_decoded$Image)
+counts$animal <- factor(counts$animal)
+counts$genotype <- factor(counts$genotype)
+counts <- counts[counts$layer %in% c(1:7),]
+```
+
+
+```{r}
+library(FSA)
+
+  Summarize(synapse_count ~ layer + genotype,
+          data=counts,
+          digits=3)
+```
+
+```{r}
+# Calculates average synapse density of each animal (replicate) for each layer
+ReplicateLayerAverages <- counts %>% group_by(genotype, animal, layer) %>%
+  summarise(synapse_count = mean(synapse_count))
+ReplicateLayerAverages
+```
+
+```{r}
+library(car)
+model = lm(synapse_count ~ layer + genotype + layer:genotype,
+           data = ReplicateLayerAverages)
+summary(model)
+
+Anova(model, type = "II")
+
+```
+
+```{r}
+library(multcompView)
+library(lsmeans)
+library(multcomp)
+
+leastsquare <- lsmeans(model, pairwise ~ genotype, adjust = "tukey")
+summary(leastsquare$contrasts)
+
+
+```
+
+
+
+```{r}
+# Calculates averages of each replicate
+ReplicateImageAverages <- counts %>% group_by(genotype, animal, image) %>%
+  summarise(synapse_count = mean(synapse_count))
+ReplicateImageAverages
+```
+
+```{r}
+# Calculates averages of each animal
+TotalAverages <- counts %>% group_by(genotype, animal) %>%
+  summarise(synapse_count = mean(synapse_count))
+TotalAverages
+```
+
+```{r}
+counts$genotype <- factor(counts$genotype, levels = c("CTRL", "CKO"))
+
+# Plots Superplot based on biological replicate averages
+superplot_p42 <- ggplot(counts, aes(x=genotype,y=synapse_count,color=factor(animal))) +
+
+  # Adds individual data points
+  geom_quasirandom(size=2, alpha = 1/2) +
+  
+  # Adds mean values as bars
+  stat_summary(data = TotalAverages, fun = mean, fun.min = mean, fun.max = mean,
+               geom = "bar", width = 0.8, color = "gray", alpha = 0.5) +
+  #facet_wrap( ~ layer)  +               
+  # Adds error bars
+  stat_summary(data = ReplicateLayerAverages, fun.data = mean_se,
+               geom = "errorbar", width = 0.1, color = "black") +
+  #facet_wrap( ~ layer)  +          
+  # Adds color palette
+  #scale_colour_manual(7) +
+  
+  # Adds Replicative averages as points (argument "cex" can be used to spread the data points if the averages are close together)
+  geom_quasirandom(data=ReplicateLayerAverages, size=5, alpha = 0.5) +
+  
+  #Cosmetics and labeling
+  theme(
+    legend.text = element_text(size = 6),
+    legend.title = element_text(size = 8), 
+  ) +
+    ggtitle ("VGAT/GEPH colocs ") + xlab("") + ylab("Coloc counts") +
+    scale_colour_manual(values = cbPalette) + scale_fill_manual(values = cbPalette)
+ppi = 300
+png(filename = "Gabrg2_cko_v_ctrl_superplot_p42_ACC.png", width = 8*ppi, height = 8*ppi, res = ppi)
+  superplot_p42
+  dev.off()
+superplot_p42
+
+print(paste("P value:", summary(leastsquare$contrasts)[['p.value']]))
+```
+
+```{r}
+counts$genotype <- factor(counts$genotype, levels = c("CTRL", "CKO"))
+# Calculates averages of each replicate
+ReplicateAverages <- counts %>% group_by(genotype, layer) %>%
+  summarise(synapse_count = mean(synapse_count))
+ReplicateAverages
+
+counts$layer <- as.numeric(counts$layer)
+counts$genotype <- as.character(counts$genotype)
+
+p_synapse <- ggplot(data = ReplicateAverages, aes(x = layer, y = synapse_count, color = genotype)
+    ) +
+  geom_ribbon(aes(ymin = synapse_count - sd(synapse_count), ymax = synapse_count + sd(synapse_count), fill = genotype), alpha = 0.3, color = NA) +
+  geom_line() + 
+  geom_point() + 
+  labs(
+    y = "VGAT/GEPH Colocs",
+    x = "Bin Number",
+    title = "P42 Synapse Counts in V1"
+  ) 
+    
+p_synapse <- p_synapse + scale_colour_manual(values = c(cbPalette[4],cbPalette[6])) + scale_fill_manual(values = c(cbPalette[4],cbPalette[6]))
+
+ggsave(filename = "plots/p42_Synapse_Counts_by_layer_ACC.png", p_synapse, units = "px", width = 1500, height = 700, bg = "transparent")
+  
+p_synapse
+```
+
+
+
+```{r}
+sessionInfo()
+```
+
